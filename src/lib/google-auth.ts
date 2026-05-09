@@ -1,30 +1,25 @@
 import { google } from 'googleapis';
-import type { JWT } from 'google-auth-library';
+import { getServerSession } from 'next-auth';
+import { authOptions } from './auth';
 
-const SCOPES = [
-  'https://www.googleapis.com/auth/drive',
-  'https://www.googleapis.com/auth/documents',
-];
-
-function getServiceAccountKey() {
-  const encoded = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-  if (!encoded) throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY not set');
-  return JSON.parse(Buffer.from(encoded, 'base64').toString('utf-8'));
+export async function getServerAuth() {
+  const session = await getServerSession(authOptions);
+  if (!session?.accessToken) {
+    throw new Error('Não autenticado');
+  }
+  return session.accessToken;
 }
 
-function getAuth(): JWT {
-  const key = getServiceAccountKey();
-  return new google.auth.JWT({
-    email: key.client_email,
-    key: key.private_key,
-    scopes: SCOPES,
-  });
+export function getOAuth2Client(accessToken: string) {
+  const oauth2Client = new google.auth.OAuth2();
+  oauth2Client.setCredentials({ access_token: accessToken });
+  return oauth2Client;
 }
 
-export function getDriveClient() {
-  return google.drive({ version: 'v3', auth: getAuth() });
+export function getDriveClientForUser(accessToken: string) {
+  return google.drive({ version: 'v3', auth: getOAuth2Client(accessToken) });
 }
 
-export function getDocsClient() {
-  return google.docs({ version: 'v1', auth: getAuth() });
+export function getDocsClientForUser(accessToken: string) {
+  return google.docs({ version: 'v1', auth: getOAuth2Client(accessToken) });
 }

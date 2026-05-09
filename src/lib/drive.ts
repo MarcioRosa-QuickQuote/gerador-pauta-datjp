@@ -1,12 +1,11 @@
-import { getDriveClient } from './google-auth';
+import { getDriveClientForUser } from './google-auth';
 import type { drive_v3 } from 'googleapis';
 
-const PORTARIAS_FOLDER = process.env.DRIVE_PORTARIAS_FOLDER_ID!;
-const PAUTAS_FOLDER = process.env.DRIVE_PAUTAS_FOLDER_ID!;
-const SGP_FOLDER = process.env.DRIVE_SGP_FOLDER_ID!;
-
-export async function listarArquivosDaPasta(folderId: string): Promise<drive_v3.Schema$File[]> {
-  const drive = getDriveClient();
+export async function listarArquivosDaPasta(
+  accessToken: string,
+  folderId: string
+): Promise<drive_v3.Schema$File[]> {
+  const drive = getDriveClientForUser(accessToken);
   const res = await drive.files.list({
     q: `'${folderId}' in parents and trashed = false`,
     fields: 'files(id, name, createdTime, mimeType)',
@@ -16,26 +15,16 @@ export async function listarArquivosDaPasta(folderId: string): Promise<drive_v3.
   return res.data.files || [];
 }
 
-/** Lista arquivos da pasta de portarias */
-export async function listarPortarias() {
-  return listarArquivosDaPasta(PORTARIAS_FOLDER);
-}
-
-/** Lista arquivos da pasta de pautas */
-export async function listarPautasSubmetidas() {
-  return listarArquivosDaPasta(PAUTAS_FOLDER);
-}
-
-/** Lista arquivos da pasta SGP */
-export async function listarSGP() {
-  return listarArquivosDaPasta(SGP_FOLDER);
-}
-
 /** Verifica se arquivo com mesmo nome já existe na pasta */
-export async function existeArquivoComNome(folderId: string, nome: string): Promise<boolean> {
-  const drive = getDriveClient();
+export async function existeArquivoComNome(
+  accessToken: string,
+  folderId: string,
+  nome: string
+): Promise<boolean> {
+  const drive = getDriveClientForUser(accessToken);
+  const escaped = nome.replace(/'/g, "\\'");
   const res = await drive.files.list({
-    q: `'${folderId}' in parents and name = '${nome.replace(/'/g, "\\'")}' and trashed = false`,
+    q: `'${folderId}' in parents and name = '${escaped}' and trashed = false`,
     fields: 'files(id)',
   });
   return (res.data.files || []).length > 0;
@@ -43,28 +32,31 @@ export async function existeArquivoComNome(folderId: string, nome: string): Prom
 
 /** Upload de arquivo para o Drive */
 export async function uploadArquivo(
+  accessToken: string,
   nome: string,
   buffer: Buffer,
-  mimeType: string
+  mimeType: string,
+  folderId: string
 ): Promise<string> {
-  const drive = getDriveClient();
+  const drive = getDriveClientForUser(accessToken);
+  const stream = require('stream');
   const res = await drive.files.create({
     requestBody: {
       name: nome,
-      parents: [PORTARIAS_FOLDER],
+      parents: [folderId],
       mimeType,
     },
     media: {
       mimeType,
-      body: require('stream').Readable.from(buffer),
+      body: stream.Readable.from(buffer),
     },
   });
   return res.data.id!;
 }
 
 /** Download de arquivo do Drive como Buffer */
-export async function downloadArquivo(fileId: string): Promise<Buffer> {
-  const drive = getDriveClient();
+export async function downloadArquivo(accessToken: string, fileId: string): Promise<Buffer> {
+  const drive = getDriveClientForUser(accessToken);
   const res = await drive.files.get(
     { fileId, alt: 'media' },
     { responseType: 'arraybuffer' }
@@ -73,26 +65,27 @@ export async function downloadArquivo(fileId: string): Promise<Buffer> {
 }
 
 /** Apagar arquivo (mover para lixeira) */
-export async function apagarArquivo(fileId: string): Promise<void> {
-  const drive = getDriveClient();
+export async function apagarArquivo(accessToken: string, fileId: string): Promise<void> {
+  const drive = getDriveClientForUser(accessToken);
   await drive.files.update({ fileId, requestBody: { trashed: true } });
 }
 
 /** Adicionar permissão pública (anyone leitor) */
-export async function tornarPublico(fileId: string): Promise<void> {
-  const drive = getDriveClient();
+export async function tornarPublico(accessToken: string, fileId: string): Promise<void> {
+  const drive = getDriveClientForUser(accessToken);
   await drive.permissions.create({
     fileId,
-    requestBody: {
-      type: 'anyone',
-      role: 'reader',
-    },
+    requestBody: { type: 'anyone', role: 'reader' },
   });
 }
 
 /** Mover arquivo para uma pasta */
-export async function moverParaPasta(fileId: string, folderId: string): Promise<void> {
-  const drive = getDriveClient();
+export async function moverParaPasta(
+  accessToken: string,
+  fileId: string,
+  folderId: string
+): Promise<void> {
+  const drive = getDriveClientForUser(accessToken);
   const file = await drive.files.get({ fileId, fields: 'parents' });
   const previousParents = (file.data.parents || []).join(',');
   await drive.files.update({
@@ -103,17 +96,18 @@ export async function moverParaPasta(fileId: string, folderId: string): Promise<
   });
 }
 
-/** Pasta de portarias */
-export function getPortariasFolderId() {
-  return PORTARIAS_FOLDER;
+/** Extrai folder IDs do request (injetados pelo middleware) */
+export function getFolderIdsFromRequest(req: Request) {
+  return {
+    portarias: req.headers.get('x-portarias-folder-id') || '',
+    pautas: req.headers.get('x-pautas-folder-id') || '',
+    sgp: req.headers.get('x-sgp-folder-id') || '',
+  };
 }
 
-/** Pasta de pautas */
-export function getPautasFolderId() {
-  return PAUTAS_FOLDER;
-}
-
-/** Pasta SGP */
-export function getSGPFolderId() {
-  return SGP_FOLDER;
+/** Extrai access token do request */
+export function getAccessTokenFromRequest(req: Request): string {
+  const token = req.headers.get('x-access-token');
+  if (!token) throw new Error('Token de acesso não encontrado');
+  return token;
 }

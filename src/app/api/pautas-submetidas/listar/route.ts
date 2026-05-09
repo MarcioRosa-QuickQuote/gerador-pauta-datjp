@@ -1,11 +1,12 @@
-import { NextResponse } from 'next/server';
-import { listarPautasSubmetidas } from '@/lib/drive';
+import { NextRequest, NextResponse } from 'next/server';
+import { listarArquivosDaPasta, getFolderIdsFromRequest, getAccessTokenFromRequest } from '@/lib/drive';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const files = await listarPautasSubmetidas();
-    const fileList = files.map((f) => ({ id: f.id!, nome: f.name! }));
-    return NextResponse.json(fileList);
+    const accessToken = getAccessTokenFromRequest(req);
+    const { pautas: folderId } = getFolderIdsFromRequest(req);
+    const files = await listarArquivosDaPasta(accessToken, folderId);
+    return NextResponse.json(files.map((f) => ({ id: f.id!, nome: f.name! })));
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

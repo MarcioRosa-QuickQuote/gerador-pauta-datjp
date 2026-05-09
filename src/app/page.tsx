@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSession, signOut } from 'next-auth/react';
 import Header from '@/components/Header';
 import UploadArea from '@/components/UploadArea';
 import BotaoVerificarSGP from '@/components/BotaoVerificarSGP';
@@ -12,10 +13,12 @@ import Notification, { showNotification } from '@/components/Notification';
 import ProgressBar from '@/components/ProgressBar';
 import Tutorial from '@/components/Tutorial';
 import Sobre from '@/components/Sobre';
-import type { NaoGerado, ArquivoInfo, Portaria, ResultadoIniciar, ResultadoLote } from '@/types';
+import LoginPage from '@/components/LoginPage';
+import type { NaoGerado, Portaria, ResultadoIniciar, ResultadoLote } from '@/types';
 
 export default function Home() {
-  // State
+  const { data: session, status } = useSession();
+
   const [uploadProgress, setUploadProgress] = useState('');
   const [pautaSGPPronta, setPautaSGPPronta] = useState(false);
   const [progressVisible, setProgressVisible] = useState(false);
@@ -25,15 +28,28 @@ export default function Home() {
   const [naoGerados, setNaoGerados] = useState<NaoGerado[]>([]);
   const [naoGeradosVisible, setNaoGeradosVisible] = useState(false);
 
-  // Check SGP pauta on mount and every 5 seconds
+  // Loading
+  if (status === 'loading') {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', fontFamily: 'Arial' }}>
+        Carregando...
+      </div>
+    );
+  }
+
+  // Login
+  if (!session) {
+    return <LoginPage />;
+  }
+
+  // Check SGP pauta every 5s
   const checkPautaSGP = useCallback(async () => {
     try {
       const res = await fetch('/api/pauta-sgp/pronta');
+      if (res.status === 401) { signOut(); return; }
       const data = await res.json();
       setPautaSGPPronta(data.pronta);
-    } catch {
-      // Silent fail
-    }
+    } catch { /* silent */ }
   }, []);
 
   useEffect(() => {
@@ -42,7 +58,7 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [checkPautaSGP]);
 
-  // Upload handler
+  // Upload
   async function handleUpload(files: FileList) {
     let uploadedCount = 0;
     const naoEnviados: NaoGerado[] = [];
@@ -50,14 +66,10 @@ export default function Home() {
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-
       try {
         const base64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
-          reader.onload = () => {
-            const result = reader.result as string;
-            resolve(result.split(',')[1]);
-          };
+          reader.onload = () => resolve((reader.result as string).split(',')[1]);
           reader.onerror = reject;
           reader.readAsDataURL(file);
         });
@@ -68,6 +80,7 @@ export default function Home() {
           body: JSON.stringify({ nome: file.name, content: base64 }),
         });
 
+        if (res.status === 401) { signOut(); return; }
         const data = await res.json();
 
         if (data.status === 'duplicate') {
@@ -77,14 +90,11 @@ export default function Home() {
         }
 
         const processed = uploadedCount + naoEnviados.length;
-        const pct = Math.round((processed / total) * 100);
-        setUploadProgress(`Progresso de upload: ${pct}% (${processed}/${total})`);
+        setUploadProgress(`Progresso de upload: ${Math.round((processed / total) * 100)}% (${processed}/${total})`);
 
         if (processed === total) {
           setNaoGerados(naoEnviados);
-          if (naoEnviados.length === 0) {
-            showNotification('Égua, já foi! Upload concluído com sucesso!');
-          }
+          if (naoEnviados.length === 0) showNotification('Égua, já foi! Upload concluído com sucesso!');
         }
       } catch (err: any) {
         showNotification(`Erro no upload: ${err.message}`, 5000);
@@ -101,75 +111,61 @@ export default function Home() {
     setProgressText('<span style=\'color: #777;\'>Iniciando...</span>');
 
     try {
-      // 1. Iniciar
       const initRes = await fetch('/api/gerar-pauta/iniciar', { method: 'POST' });
+      if (initRes.status === 401) { signOut(); return; }
       if (!initRes.ok) throw new Error('Erro ao iniciar geração');
       const inicio: ResultadoIniciar = await initRes.json();
 
       const todasPortarias: Portaria[] = [];
       const todosNaoGerados: NaoGerado[] = [];
-
       const fileInfos = inicio.fileInfos;
       const total = fileInfos.length + (inicio.sgpFileId ? 1 : 0);
       let processados = 0;
 
-      // 2. Processar lotes (5 por vez)
-      const LOTE_SIZE = 5;
-      for (let i = 0; i < fileInfos.length; i += LOTE_SIZE) {
-        const lote = fileInfos.slice(i, i + LOTE_SIZE);
+      for (let i = 0; i < fileInfos.length; i += 5) {
+        const lote = fileInfos.slice(i, i + 5);
         const batchStart = processados + 1;
         const batchEnd = Math.min(processados + lote.length, total);
-
         const pct = total > 0 ? Math.round((processados / total) * 90) : 0;
         setProgressValue(pct);
-        setProgressText(
-          `<span style='color: #777;'>Processando ${batchStart} \u2013 ${batchEnd} de ${total}...</span>`
-        );
+        setProgressText(`<span style='color: #777;'>Processando ${batchStart} \u2013 ${batchEnd} de ${total}...</span>`);
 
         const loteRes = await fetch('/api/gerar-pauta/processar-lote', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ arquivos: lote }),
         });
-
+        if (loteRes.status === 401) { signOut(); return; }
         if (!loteRes.ok) throw new Error('Erro ao processar lote');
         const loteData: ResultadoLote = await loteRes.json();
-
         todasPortarias.push(...loteData.portarias);
         todosNaoGerados.push(...loteData.naoGerados);
         processados += lote.length;
       }
 
-      // 3. Processar SGP
       if (inicio.sgpFileId) {
-        setProgressText("<span style='color: #777;'>Processando pauta SGP...</span>");
+        setProgressText('<span style=\'color: #777;\'>Processando pauta SGP...</span>');
         const sgpRes = await fetch('/api/gerar-pauta/processar-sgp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sgpFileId: inicio.sgpFileId }),
         });
-
+        if (sgpRes.status === 401) { signOut(); return; }
         if (!sgpRes.ok) throw new Error('Erro ao processar SGP');
         const sgpData: ResultadoLote = await sgpRes.json();
-
         todasPortarias.push(...sgpData.portarias);
         todosNaoGerados.push(...sgpData.naoGerados);
       }
 
-      // 4. Finalizar
       setProgressValue(95);
-      setProgressText("<span style='color: #777;'>Escrevendo pauta...</span>");
+      setProgressText('<span style=\'color: #777;\'>Escrevendo pauta...</span>');
 
       const finRes = await fetch('/api/gerar-pauta/finalizar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          docId: inicio.docId,
-          portarias: todasPortarias,
-          naoGerados: todosNaoGerados,
-        }),
+        body: JSON.stringify({ docId: inicio.docId, portarias: todasPortarias, naoGerados: todosNaoGerados }),
       });
-
+      if (finRes.status === 401) { signOut(); return; }
       if (!finRes.ok) throw new Error('Erro ao finalizar pauta');
       const finData = await finRes.json();
 
@@ -196,95 +192,94 @@ export default function Home() {
   async function apagarPortarias() {
     try {
       const listRes = await fetch('/api/arquivos/listar');
+      if (listRes.status === 401) { signOut(); return; }
       const fileList: { id: string }[] = await listRes.json();
 
-      if (!fileList || fileList.length === 0) {
-        showNotification('Nenhum arquivo para apagar.');
-        return;
-      }
+      if (!fileList || fileList.length === 0) { showNotification('Nenhum arquivo para apagar.'); return; }
 
       let deleted = 0;
       for (const f of fileList) {
         await fetch(`/api/arquivos/apagar?id=${f.id}`, { method: 'DELETE' });
         deleted++;
-        const pct = Math.round((deleted / fileList.length) * 100);
         setProgressVisible(true);
+        const pct = Math.round((deleted / fileList.length) * 100);
         setProgressValue(pct);
         setProgressText(`${pct}%`);
       }
-
       setTimeout(() => setProgressVisible(false), 1000);
       showNotification('Portarias inseridas apagadas com sucesso!');
-    } catch (err: any) {
-      showNotification(`Erro: ${err.message}`, 5000);
-    }
+    } catch (err: any) { showNotification(`Erro: ${err.message}`, 5000); }
   }
 
   async function apagarPautas() {
     try {
       const listRes = await fetch('/api/pautas-submetidas/listar');
+      if (listRes.status === 401) { signOut(); return; }
       const fileList: { id: string }[] = await listRes.json();
 
-      if (!fileList || fileList.length === 0) {
-        showNotification('Nenhuma pauta do dia para apagar.');
-        return;
-      }
+      if (!fileList || fileList.length === 0) { showNotification('Nenhuma pauta do dia para apagar.'); return; }
 
       let deleted = 0;
       for (const f of fileList) {
         await fetch(`/api/pautas-submetidas/apagar?id=${f.id}`, { method: 'DELETE' });
         deleted++;
-        const pct = Math.round((deleted / fileList.length) * 100);
         setProgressVisible(true);
-        setProgressValue(pct);
-        setProgressText(`${pct}%`);
+        setProgressValue(Math.round((deleted / fileList.length) * 100));
+        setProgressText(`${Math.round((deleted / fileList.length) * 100)}%`);
       }
-
       setTimeout(() => setProgressVisible(false), 1000);
       showNotification('Pautas do dia apagadas com sucesso!');
-    } catch (err: any) {
-      showNotification(`Erro: ${err.message}`, 5000);
-    }
+    } catch (err: any) { showNotification(`Erro: ${err.message}`, 5000); }
   }
 
   async function apagarTudo() {
     try {
       await fetch('/api/apagar-tudo', { method: 'DELETE' });
       showNotification('Todos os arquivos foram apagados com sucesso!');
-    } catch (err: any) {
-      showNotification(`Erro: ${err.message}`, 5000);
-    }
+    } catch (err: any) { showNotification(`Erro: ${err.message}`, 5000); }
   }
 
   return (
     <>
+      {/* Logout button */}
+      <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 1000 }}>
+        <span style={{ color: '#00274d', fontSize: 13, marginRight: 8 }}>
+          {session.user?.name}
+        </span>
+        <button
+          onClick={() => signOut()}
+          style={{
+            backgroundColor: 'transparent',
+            color: '#666',
+            border: '1px solid #ccc',
+            borderRadius: 4,
+            padding: '2px 8px',
+            cursor: 'pointer',
+            fontSize: 12,
+          }}
+        >
+          Sair
+        </button>
+      </div>
+
       <Tutorial />
       <Header />
-
       <UploadArea onUpload={handleUpload} uploadProgress={uploadProgress} />
-
       <ProgressBar visible={progressVisible} value={progressValue} text={progressText} />
-
       <BotaoVerificarSGP onCheck={checkPautaSGP} />
-
       <BotaoGerarPauta onGerar={gerarPauta} disabled={gerando} />
-
       <PautaNotification visible={pautaSGPPronta} />
-
       <DeleteSection
         onApagarPortarias={apagarPortarias}
         onApagarPautas={apagarPautas}
         onApagarTudo={apagarTudo}
       />
-
       <NaoGeradosList
         naoGerados={naoGerados}
         visible={naoGeradosVisible}
         onToggle={() => setNaoGeradosVisible(!naoGeradosVisible)}
       />
-
       <Notification />
-
       <Sobre />
     </>
   );

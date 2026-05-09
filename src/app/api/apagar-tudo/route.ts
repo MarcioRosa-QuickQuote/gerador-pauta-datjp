@@ -1,18 +1,19 @@
-import { NextResponse } from 'next/server';
-import { listarPortarias, listarPautasSubmetidas, apagarArquivo } from '@/lib/drive';
+import { NextRequest, NextResponse } from 'next/server';
+import { listarArquivosDaPasta, apagarArquivo, getFolderIdsFromRequest, getAccessTokenFromRequest } from '@/lib/drive';
 
-export async function DELETE() {
+export async function DELETE(req: NextRequest) {
   try {
-    // Apagar todas as portarias
-    const portarias = await listarPortarias();
+    const accessToken = getAccessTokenFromRequest(req);
+    const folders = getFolderIdsFromRequest(req);
+
+    const portarias = await listarArquivosDaPasta(accessToken, folders.portarias);
     for (const f of portarias) {
-      await apagarArquivo(f.id!);
+      await apagarArquivo(accessToken, f.id!);
     }
 
-    // Apagar todas as pautas
-    const pautas = await listarPautasSubmetidas();
+    const pautas = await listarArquivosDaPasta(accessToken, folders.pautas);
     for (const f of pautas) {
-      await apagarArquivo(f.id!);
+      await apagarArquivo(accessToken, f.id!);
     }
 
     return NextResponse.json({ success: true });
