@@ -27,6 +27,8 @@ export default function Home() {
   const [gerando, setGerando] = useState(false);
   const [naoGerados, setNaoGerados] = useState<NaoGerado[]>([]);
   const [naoGeradosVisible, setNaoGeradosVisible] = useState(false);
+  const [showSGPButton, setShowSGPButton] = useState(true);
+  const [showConfig, setShowConfig] = useState(false);
 
   // Check SGP pauta every 5s (hook no topo, antes dos returns condicionais)
   const checkPautaSGP = useCallback(async () => {
@@ -243,32 +245,108 @@ export default function Home() {
 
   return (
     <>
-      {/* Logout button */}
+      {/* User avatar + config */}
       <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 1000 }}>
-        <span style={{ color: '#00274d', fontSize: 13, marginRight: 8 }}>
-          {session.user?.name}
-        </span>
-        <button
-          onClick={() => signOut()}
-          style={{
-            backgroundColor: 'transparent',
-            color: '#666',
-            border: '1px solid #ccc',
-            borderRadius: 4,
-            padding: '2px 8px',
-            cursor: 'pointer',
-            fontSize: 12,
-          }}
+        <div
+          onClick={() => setShowConfig(!showConfig)}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
         >
-          Sair
-        </button>
+          <span style={{ color: '#00274d', fontSize: 13 }}>
+            {session.user?.name}
+          </span>
+          {session.user?.image ? (
+            <img
+              src={session.user.image}
+              alt=""
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                border: '2px solid #00274d',
+                objectFit: 'cover',
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                backgroundColor: '#00274d',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 14,
+                fontWeight: 'bold',
+                border: '2px solid #00274d',
+              }}
+            >
+              {(session.user?.name || '?')[0].toUpperCase()}
+            </div>
+          )}
+        </div>
+
+        {showConfig && (
+          <>
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 999 }}
+              onClick={() => setShowConfig(false)}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                top: 40,
+                right: 0,
+                backgroundColor: 'white',
+                borderRadius: 8,
+                boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                padding: '1rem',
+                zIndex: 1000,
+                minWidth: 220,
+                fontSize: 14,
+                color: '#333',
+              }}
+            >
+              <label
+                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '0.5rem 0' }}
+              >
+                <input
+                  type="checkbox"
+                  checked={showSGPButton}
+                  onChange={(e) => setShowSGPButton(e.target.checked)}
+                  style={{ accentColor: '#00274d' }}
+                />
+                Verificar Pauta SGP
+              </label>
+              <hr style={{ margin: '0.5rem 0', borderColor: '#eee' }} />
+              <button
+                onClick={() => signOut()}
+                style={{
+                  width: '100%',
+                  padding: '0.5rem',
+                  backgroundColor: '#00274d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#001f3f')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#00274d')}
+              >
+                Sair
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       <Tutorial />
       <Header />
       <UploadArea onUpload={handleUpload} uploadProgress={uploadProgress} />
       <ProgressBar visible={progressVisible} value={progressValue} text={progressText} />
-      <BotaoVerificarSGP onCheck={checkPautaSGP} />
+      {showSGPButton && <BotaoVerificarSGP onCheck={checkPautaSGP} />}
       <BotaoGerarPauta onGerar={gerarPauta} disabled={gerando} />
       <PautaNotification visible={pautaSGPPronta} />
       <DeleteSection
