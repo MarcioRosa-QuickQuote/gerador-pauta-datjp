@@ -28,6 +28,24 @@ export default function Home() {
   const [naoGerados, setNaoGerados] = useState<NaoGerado[]>([]);
   const [naoGeradosVisible, setNaoGeradosVisible] = useState(false);
 
+  // Check SGP pauta every 5s (hook no topo, antes dos returns condicionais)
+  const checkPautaSGP = useCallback(async () => {
+    if (!session) return;
+    try {
+      const res = await fetch('/api/pauta-sgp/pronta');
+      if (res.status === 401) { signOut(); return; }
+      const data = await res.json();
+      setPautaSGPPronta(data.pronta);
+    } catch { /* silent */ }
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    checkPautaSGP();
+    const interval = setInterval(checkPautaSGP, 5000);
+    return () => clearInterval(interval);
+  }, [checkPautaSGP, session]);
+
   // Loading
   if (status === 'loading') {
     return (
@@ -41,22 +59,6 @@ export default function Home() {
   if (!session) {
     return <LoginPage />;
   }
-
-  // Check SGP pauta every 5s
-  const checkPautaSGP = useCallback(async () => {
-    try {
-      const res = await fetch('/api/pauta-sgp/pronta');
-      if (res.status === 401) { signOut(); return; }
-      const data = await res.json();
-      setPautaSGPPronta(data.pronta);
-    } catch { /* silent */ }
-  }, []);
-
-  useEffect(() => {
-    checkPautaSGP();
-    const interval = setInterval(checkPautaSGP, 5000);
-    return () => clearInterval(interval);
-  }, [checkPautaSGP]);
 
   // Upload
   async function handleUpload(files: FileList) {
