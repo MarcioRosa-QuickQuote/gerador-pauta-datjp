@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { downloadArquivo, getAccessTokenFromRequest } from '@/lib/drive';
+import { getSessionOrThrow } from '@/lib/google-auth';
+import { downloadArquivo } from '@/lib/drive';
 import { parsearTextoPortarias } from '@/lib/parser';
 import type { Portaria, NaoGerado } from '@/types';
 
@@ -11,7 +12,8 @@ async function extractDocxText(buffer: Buffer): Promise<string> {
 
 export async function POST(req: NextRequest) {
   try {
-    const accessToken = getAccessTokenFromRequest(req);
+    const session = await getSessionOrThrow();
+    const accessToken = session.accessToken!;
     const { arquivos }: { arquivos: { id: string; nome: string }[] } = await req.json();
 
     const portarias: Portaria[] = [];
@@ -20,51 +22,30 @@ export async function POST(req: NextRequest) {
 
     for (const fi of arquivos) {
       const nome = fi.nome;
-      if (processados.has(nome)) {
-        naoGerados.push({ nome, motivo: 'Arquivo duplicado.' });
-        continue;
-      }
+      if (processados.has(nome)) { naoGerados.push({ nome, motivo: 'Arquivo duplicado.' }); continue; }
       processados.add(nome);
-
       try {
         const buffer = await downloadArquivo(accessToken, fi.id);
         let conteudo: string;
-
-        if (nome.toLowerCase().endsWith('.doc')) {
-          try {
-            conteudo = await extractDocxText(buffer);
-          } catch {
-            naoGerados.push({ nome, motivo: 'Arquivo .doc legado não suportado. Converta para .docx.' });
-            continue;
-          }
-        } else {
-          conteudo = await extractDocxText(buffer);
-        }
-
-        if (!conteudo || conteudo.trim() === '') {
-          naoGerados.push({ nome, motivo: 'Erro ao extrair texto ou conteúdo vazio.' });
+        try { conteudo = await extractDocxText(buffer); } catch {
+          naoGerados.push({ nome, motivo: 'Arquivo não suportado. Converta para .docx.' });
           continue;
         }
-
+        if (!conteudo || conteudo.trim() === '') {
+          naoGerados.push({ nome, motivo: 'Erro ao extrair texto ou conteúdo vazio.' }); continue;
+        }
         const parsed = parsearTextoPortarias(conteudo, nome);
         for (const p of parsed) {
-          if (
-            p.numeroOriginal === 'Nº desconhecido' &&
-            p.data === 'Data desconhecida.' &&
-            p.conteudo === 'Conteúdo não encontrado.'
-          ) {
+          if (p.numeroOriginal === 'Nº desconhecido' && p.data === 'Data desconhecida.' && p.conteudo === 'Conteúdo não encontrado.') {
             naoGerados.push({ nome, motivo: 'Portaria sem número, data ou conteúdo válido.' });
-          } else {
-            portarias.push(p);
-          }
+          } else { portarias.push(p); }
         }
-      } catch (err: any) {
-        naoGerados.push({ nome, motivo: `Erro ao processar: ${err.message}` });
-      }
+      } catch (err: any) { naoGerados.push({ nome, motivo: `Erro ao processar: ${err.message}` }); }
     }
 
     return NextResponse.json({ portarias, naoGerados });
   } catch (err: any) {
+    if (err.message === 'Não autenticado') return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

@@ -1,12 +1,12 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth';
 
-export async function getServerAuth() {
+export async function getSessionOrThrow() {
   const session = await getServerSession(authOptions);
   if (!session?.accessToken) {
     throw new Error('Não autenticado');
   }
-  return session.accessToken;
+  return session;
 }
 
 export async function driveFetch(accessToken: string, path: string, options: RequestInit = {}) {

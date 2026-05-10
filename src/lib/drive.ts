@@ -1,5 +1,11 @@
 import { driveFetch } from './google-auth';
 
+const FOLDER_NAMES = {
+  portarias: 'DATJP - Portarias',
+  pautas: 'DATJP - Pautas',
+  sgp: 'DATJP - SGP',
+};
+
 export async function listarArquivosDaPasta(
   accessToken: string,
   folderId: string
@@ -38,7 +44,7 @@ export async function uploadArquivo(
     Buffer.from(`\r\n--${boundary}--\r\n`),
   ]);
 
-  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -47,11 +53,7 @@ export async function uploadArquivo(
     body,
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Upload error ${res.status}: ${text}`);
-  }
-
+  if (!res.ok) throw new Error(`Upload error ${res.status}`);
   const data = await res.json();
   return data.id;
 }
@@ -84,22 +86,16 @@ export async function tornarPublico(accessToken: string, fileId: string): Promis
   });
 }
 
-export async function moverParaPasta(
-  accessToken: string,
-  fileId: string,
-  folderId: string
-): Promise<void> {
+export async function moverParaPasta(accessToken: string, fileId: string, folderId: string): Promise<void> {
   const fileRes = await driveFetch(accessToken, `files/${fileId}?fields=parents`);
   const fileData = await fileRes.json();
   const previousParents = (fileData.parents || []).join(',');
-
   await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?addParents=${folderId}&removeParents=${previousParents}`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 }
 
-/** Exporta Google Doc como texto puro (para ler docs SGP) */
 export async function exportarGoogleDoc(accessToken: string, fileId: string): Promise<string> {
   const res = await fetch(
     `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text%2Fplain`,
@@ -109,42 +105,6 @@ export async function exportarGoogleDoc(accessToken: string, fileId: string): Pr
   return res.text();
 }
 
-export async function getFolderIdsFromRequest(req: Request) {
-  const accessToken = getAccessTokenFromRequest(req);
-  const portarias = req.headers.get('x-portarias-folder-id') || '';
-  const pautas = req.headers.get('x-pautas-folder-id') || '';
-  const sgp = req.headers.get('x-sgp-folder-id') || '';
-
-  // Fallback: se headers vieram vazios, busca/cria pastas agora
-  if (!portarias || !pautas || !sgp) {
-    return ensureFolders(accessToken);
-  }
-
-  return { portarias, pautas, sgp };
-}
-
-/** Versao sem fallback — para polling (nao cria pastas) */
-export function getFolderIdsOrEmpty(req: Request) {
-  return {
-    portarias: req.headers.get('x-portarias-folder-id') || '',
-    pautas: req.headers.get('x-pautas-folder-id') || '',
-    sgp: req.headers.get('x-sgp-folder-id') || '',
-  };
-}
-
-export function getAccessTokenFromRequest(req: Request): string {
-  const token = req.headers.get('x-access-token');
-  if (!token) throw new Error('Token de acesso não encontrado');
-  return token;
-}
-
-const FOLDER_NAMES = {
-  portarias: 'DATJP - Portarias',
-  pautas: 'DATJP - Pautas',
-  sgp: 'DATJP - SGP',
-};
-
-/** Fallback: busca ou cria as pastas pelo nome (caso nao estejam na sessao) */
 export async function ensureFolders(accessToken: string) {
   async function findOrCreate(name: string): Promise<string> {
     const q = encodeURIComponent(`name = '${name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
@@ -152,7 +112,6 @@ export async function ensureFolders(accessToken: string) {
     const data = await res.json();
     if (data.files?.[0]?.id) return data.files[0].id;
 
-    // Criar pasta
     const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
       method: 'POST',
       headers: {
@@ -166,11 +125,11 @@ export async function ensureFolders(accessToken: string) {
     return created.id;
   }
 
-  const portarias = findOrCreate(FOLDER_NAMES.portarias);
-  const pautas = findOrCreate(FOLDER_NAMES.pautas);
-  const sgp = findOrCreate(FOLDER_NAMES.sgp);
-
-  const [portariasId, pautasId, sgpId] = await Promise.all([portarias, pautas, sgp]);
+  const [portariasId, pautasId, sgpId] = await Promise.all([
+    findOrCreate(FOLDER_NAMES.portarias),
+    findOrCreate(FOLDER_NAMES.pautas),
+    findOrCreate(FOLDER_NAMES.sgp),
+  ]);
 
   return { portarias: portariasId, pautas: pautasId, sgp: sgpId };
 }
