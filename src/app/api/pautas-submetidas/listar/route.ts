@@ -4,7 +4,7 @@ import { listarArquivosDaPasta, getFolderIdsFromRequest, getAccessTokenFromReque
 export async function GET(req: NextRequest) {
   try {
     const accessToken = getAccessTokenFromRequest(req);
-    const { pautas: folderId } = getFolderIdsFromRequest(req);
+    const { pautas: folderId } = await getFolderIdsFromRequest(req);
     const files = await listarArquivosDaPasta(accessToken, folderId);
     return NextResponse.json(files.map((f) => ({ id: f.id!, nome: f.name! })));
   } catch (err: any) {

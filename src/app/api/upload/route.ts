@@ -5,7 +5,7 @@ import { detectarMimeType } from '@/lib/utils';
 export async function POST(req: NextRequest) {
   try {
     const accessToken = getAccessTokenFromRequest(req);
-    const { portarias: folderId } = getFolderIdsFromRequest(req);
+    const { portarias: folderId } = await getFolderIdsFromRequest(req);
     const { nome, content } = await req.json();
 
     if (!nome || !content) {

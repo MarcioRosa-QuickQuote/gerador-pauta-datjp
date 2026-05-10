@@ -108,16 +108,59 @@ export async function exportarGoogleDoc(accessToken: string, fileId: string): Pr
   return res.text();
 }
 
-export function getFolderIdsFromRequest(req: Request) {
-  return {
-    portarias: req.headers.get('x-portarias-folder-id') || '',
-    pautas: req.headers.get('x-pautas-folder-id') || '',
-    sgp: req.headers.get('x-sgp-folder-id') || '',
-  };
+export async function getFolderIdsFromRequest(req: Request) {
+  const accessToken = getAccessTokenFromRequest(req);
+  const portarias = req.headers.get('x-portarias-folder-id') || '';
+  const pautas = req.headers.get('x-pautas-folder-id') || '';
+  const sgp = req.headers.get('x-sgp-folder-id') || '';
+
+  // Fallback: se headers vieram vazios, busca/cria pastas agora
+  if (!portarias || !pautas || !sgp) {
+    return ensureFolders(accessToken);
+  }
+
+  return { portarias, pautas, sgp };
 }
 
 export function getAccessTokenFromRequest(req: Request): string {
   const token = req.headers.get('x-access-token');
   if (!token) throw new Error('Token de acesso não encontrado');
   return token;
+}
+
+const FOLDER_NAMES = {
+  portarias: 'DATJP - Portarias',
+  pautas: 'DATJP - Pautas',
+  sgp: 'DATJP - SGP',
+};
+
+/** Fallback: busca ou cria as pastas pelo nome (caso nao estejam na sessao) */
+export async function ensureFolders(accessToken: string) {
+  async function findOrCreate(name: string): Promise<string> {
+    const q = encodeURIComponent(`name = '${name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
+    const res = await driveFetch(accessToken, `files?q=${q}&fields=files(id)&pageSize=1`);
+    const data = await res.json();
+    if (data.files?.[0]?.id) return data.files[0].id;
+
+    // Criar pasta
+    const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder' }),
+    });
+    if (!createRes.ok) throw new Error(`Falha ao criar pasta ${name}: ${createRes.status}`);
+    const created = await createRes.json();
+    return created.id;
+  }
+
+  const portarias = findOrCreate(FOLDER_NAMES.portarias);
+  const pautas = findOrCreate(FOLDER_NAMES.pautas);
+  const sgp = findOrCreate(FOLDER_NAMES.sgp);
+
+  const [portariasId, pautasId, sgpId] = await Promise.all([portarias, pautas, sgp]);
+
+  return { portarias: portariasId, pautas: pautasId, sgp: sgpId };
 }

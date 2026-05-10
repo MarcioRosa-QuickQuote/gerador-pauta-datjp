@@ -5,7 +5,7 @@ import { gerarNomePauta } from '@/lib/utils';
 export async function POST(req: NextRequest) {
   try {
     const accessToken = getAccessTokenFromRequest(req);
-    const folders = getFolderIdsFromRequest(req);
+    const folders = await getFolderIdsFromRequest(req);
 
     const portarias = await listarArquivosDaPasta(accessToken, folders.portarias);
     const sgpFiles = await listarArquivosDaPasta(accessToken, folders.sgp);

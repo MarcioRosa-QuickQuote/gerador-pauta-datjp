@@ -4,7 +4,7 @@ import { listarArquivosDaPasta, apagarArquivo, getFolderIdsFromRequest, getAcces
 export async function DELETE(req: NextRequest) {
   try {
     const accessToken = getAccessTokenFromRequest(req);
-    const folders = getFolderIdsFromRequest(req);
+    const folders = await getFolderIdsFromRequest(req);
 
     const portarias = await listarArquivosDaPasta(accessToken, folders.portarias);
     for (const f of portarias) {

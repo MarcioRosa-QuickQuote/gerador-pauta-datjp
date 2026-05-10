@@ -5,7 +5,7 @@ import { isHoje } from '@/lib/utils';
 export async function GET(req: NextRequest) {
   try {
     const accessToken = getAccessTokenFromRequest(req);
-    const { sgp: folderId } = getFolderIdsFromRequest(req);
+    const { sgp: folderId } = await getFolderIdsFromRequest(req);
     const files = await listarArquivosDaPasta(accessToken, folderId);
 
     if (files.length === 0) {
