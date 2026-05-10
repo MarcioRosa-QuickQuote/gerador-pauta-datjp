@@ -275,6 +275,8 @@ export default function Home() {
         onApagarPortarias={apagarPortarias}
         onApagarPautas={apagarPautas}
         onApagarTudo={apagarTudo}
+        portariasFolderId={(session as any).portariasFolderId}
+        pautasFolderId={(session as any).pautasFolderId}
       />
       <NaoGeradosList
         naoGerados={naoGerados}

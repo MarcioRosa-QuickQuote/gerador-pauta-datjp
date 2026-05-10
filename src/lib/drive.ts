@@ -30,11 +30,12 @@ export async function uploadArquivo(
   folderId: string
 ): Promise<string> {
   const boundary = `-------${Date.now()}`;
+  const metadata = JSON.stringify({ name: nome, parents: [folderId] });
   const body = Buffer.concat([
-    Buffer.from(`--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({ name: nome, parents: [folderId] })}\r\n`),
-    Buffer.from(`--${boundary}\r\nContent-Type: ${mimeType}\r\nContent-Transfer-Encoding: base64\r\n\r\n`),
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`),
+    Buffer.from(`--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`),
     buffer,
-    Buffer.from(`\r\n--${boundary}--`),
+    Buffer.from(`\r\n--${boundary}--\r\n`),
   ]);
 
   const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {

@@ -22,11 +22,12 @@ export async function POST(req: NextRequest) {
 
     // Upload para Drive
     const boundary = `-------${Date.now()}`;
+    const metadata = JSON.stringify({ name: `${titulo}.docx`, parents: [pautasFolderId] });
     const body = Buffer.concat([
-      Buffer.from(`--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({ name: `${titulo}.docx`, parents: [pautasFolderId] })}\r\n`),
-      Buffer.from(`--${boundary}\r\nContent-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\nContent-Transfer-Encoding: base64\r\n\r\n`),
+      Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`),
+      Buffer.from(`--${boundary}\r\nContent-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\n\r\n`),
       buffer,
-      Buffer.from(`\r\n--${boundary}--`),
+      Buffer.from(`\r\n--${boundary}--\r\n`),
     ]);
 
     const uploadRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {

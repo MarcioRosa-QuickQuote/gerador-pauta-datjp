@@ -6,12 +6,16 @@ interface DeleteSectionProps {
   onApagarPortarias: () => void;
   onApagarPautas: () => void;
   onApagarTudo: () => void;
+  portariasFolderId?: string;
+  pautasFolderId?: string;
 }
 
 export default function DeleteSection({
   onApagarPortarias,
   onApagarPautas,
   onApagarTudo,
+  portariasFolderId,
+  pautasFolderId,
 }: DeleteSectionProps) {
   const [open, setOpen] = useState(false);
 
@@ -49,7 +53,7 @@ export default function DeleteSection({
               Portarias Inseridas
             </button>
             <a
-              href="https://drive.google.com/drive/folders/1uHfYaoJDYGhcP1tZ6pjHHI-E98N_ops7"
+              href={portariasFolderId ? `https://drive.google.com/drive/folders/${portariasFolderId}` : '#'}
               target="_blank"
               rel="noopener noreferrer"
               className="ml-2"
@@ -75,7 +79,7 @@ export default function DeleteSection({
               Pauta do Dia
             </button>
             <a
-              href="https://drive.google.com/drive/folders/1LiPk4lK7kEGEoJcWfbkUzp9eo1s1Ay13"
+              href={pautasFolderId ? `https://drive.google.com/drive/folders/${pautasFolderId}` : '#'}
               target="_blank"
               rel="noopener noreferrer"
               className="ml-2"
