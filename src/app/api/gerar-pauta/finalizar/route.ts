@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { escreverPortarias } from '@/lib/docs';
-import { getAccessTokenFromRequest } from '@/lib/drive';
+import { gerarDocxBuffer } from '@/lib/docs';
+import { moverParaPasta, tornarPublico, getAccessTokenFromRequest } from '@/lib/drive';
 import { deduplicarPortarias, ordenarPortarias } from '@/lib/utils';
 import type { Portaria, NaoGerado } from '@/types';
 
@@ -8,16 +8,45 @@ export async function POST(req: NextRequest) {
   try {
     const accessToken = getAccessTokenFromRequest(req);
     const {
-      docId,
       portarias,
       naoGerados,
-    }: { docId: string; portarias: Portaria[]; naoGerados: NaoGerado[] } = await req.json();
+      titulo,
+      pautasFolderId,
+    }: { portarias: Portaria[]; naoGerados: NaoGerado[]; titulo: string; pautasFolderId: string } = await req.json();
 
     let lista = deduplicarPortarias(portarias);
     lista = ordenarPortarias(lista);
-    await escreverPortarias(accessToken, docId, lista);
 
-    const url = `https://docs.google.com/document/d/${docId}/edit`;
+    // Gera .docx
+    const buffer = await gerarDocxBuffer(lista);
+
+    // Upload para Drive
+    const boundary = `-------${Date.now()}`;
+    const body = Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({ name: `${titulo}.docx`, parents: [pautasFolderId] })}\r\n`),
+      Buffer.from(`--${boundary}\r\nContent-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\nContent-Transfer-Encoding: base64\r\n\r\n`),
+      buffer,
+      Buffer.from(`\r\n--${boundary}--`),
+    ]);
+
+    const uploadRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    });
+
+    if (!uploadRes.ok) throw new Error(`Upload error ${uploadRes.status}`);
+    const { id: docId } = await uploadRes.json();
+
+    // Permissão pública
+    await tornarPublico(accessToken, docId);
+
+    // Link do arquivo no Drive
+    const url = `https://drive.google.com/file/d/${docId}/view`;
+
     return NextResponse.json({ url, naoGerados });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

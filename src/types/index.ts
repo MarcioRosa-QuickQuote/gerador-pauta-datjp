@@ -26,6 +26,8 @@ export interface ResultadoIniciar {
   docId: string;
   fileInfos: ArquivoInfo[];
   sgpFileId: string | null;
+  titulo: string;
+  pautasFolderId: string;
 }
 
 export interface ResultadoLote {

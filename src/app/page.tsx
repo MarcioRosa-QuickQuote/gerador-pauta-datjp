@@ -163,7 +163,7 @@ export default function Home() {
       const finRes = await fetch('/api/gerar-pauta/finalizar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ docId: inicio.docId, portarias: todasPortarias, naoGerados: todosNaoGerados }),
+        body: JSON.stringify({ portarias: todasPortarias, naoGerados: todosNaoGerados, titulo: inicio.titulo, pautasFolderId: inicio.pautasFolderId }),
       });
       if (finRes.status === 401) { signOut(); return; }
       if (!finRes.ok) throw new Error('Erro ao finalizar pauta');

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { obterTextoDoc } from '@/lib/docs';
-import { getAccessTokenFromRequest } from '@/lib/drive';
+import { exportarGoogleDoc, getAccessTokenFromRequest } from '@/lib/drive';
 import { parsearTextoPortarias, removerCabecalhoSGP } from '@/lib/parser';
 import type { Portaria, NaoGerado } from '@/types';
 
@@ -12,7 +11,7 @@ export async function POST(req: NextRequest) {
     const portarias: Portaria[] = [];
     const naoGerados: NaoGerado[] = [];
 
-    const textoRaw = await obterTextoDoc(accessToken, sgpFileId);
+    const textoRaw = await exportarGoogleDoc(accessToken, sgpFileId);
     const texto = removerCabecalhoSGP(textoRaw);
     const parsed = parsearTextoPortarias(texto, 'Pauta SGP');
 

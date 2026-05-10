@@ -23,18 +23,3 @@ export async function driveFetch(accessToken: string, path: string, options: Req
   }
   return res;
 }
-
-export async function docsFetch(accessToken: string, path: string, options: RequestInit = {}) {
-  const res = await fetch(`https://docs.googleapis.com/v1/${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      ...options.headers,
-    },
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Docs API error ${res.status}: ${text}`);
-  }
-  return res;
-}

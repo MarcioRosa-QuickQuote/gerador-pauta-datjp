@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listarArquivosDaPasta, getFolderIdsFromRequest, getAccessTokenFromRequest } from '@/lib/drive';
-import { criarDocPauta } from '@/lib/docs';
 import { gerarNomePauta } from '@/lib/utils';
 
 export async function POST(req: NextRequest) {
@@ -18,9 +17,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nenhum arquivo para gerar a pauta.' }, { status: 400 });
     }
 
-    const docId = await criarDocPauta(accessToken, gerarNomePauta(), folders.pautas);
+    const titulo = gerarNomePauta();
 
-    return NextResponse.json({ docId, fileInfos, sgpFileId });
+    return NextResponse.json({ docId: '', fileInfos, sgpFileId, titulo, pautasFolderId: folders.pautas });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

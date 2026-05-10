@@ -98,6 +98,16 @@ export async function moverParaPasta(
   });
 }
 
+/** Exporta Google Doc como texto puro (para ler docs SGP) */
+export async function exportarGoogleDoc(accessToken: string, fileId: string): Promise<string> {
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text%2Fplain`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!res.ok) throw new Error(`Export error ${res.status}`);
+  return res.text();
+}
+
 export function getFolderIdsFromRequest(req: Request) {
   return {
     portarias: req.headers.get('x-portarias-folder-id') || '',

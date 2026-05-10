@@ -60,7 +60,7 @@ export const authOptions: AuthOptions = {
       authorization: {
         params: {
           scope:
-            'openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/documents',
+            'openid email profile https://www.googleapis.com/auth/drive.file',
           access_type: 'offline',
           prompt: 'consent',
         },
