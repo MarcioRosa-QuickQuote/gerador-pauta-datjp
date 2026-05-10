@@ -1,25 +1,31 @@
-import { getDocsClientForUser } from './google-auth';
+import { docsFetch } from './google-auth';
 import { tornarPublico, moverParaPasta } from './drive';
 import type { Portaria } from '@/types';
 
-/** Cria um Google Doc vazio e retorna o ID */
+const YELLOW_BG = {
+  color: { rgbColor: { red: 1, green: 1, blue: 0 } },
+};
+
 export async function criarDocPauta(
   accessToken: string,
   titulo: string,
   pautasFolderId: string
 ): Promise<string> {
-  const docs = getDocsClientForUser(accessToken);
-  const res = await docs.documents.create({
-    requestBody: { title: titulo },
+  const res = await docsFetch(accessToken, 'documents', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: titulo }),
   });
-  const docId = res.data.documentId!;
+  const data = await res.json();
+  const docId = data.documentId;
 
   await tornarPublico(accessToken, docId);
   await moverParaPasta(accessToken, docId, pautasFolderId);
 
-  await docs.documents.batchUpdate({
-    documentId: docId,
-    requestBody: {
+  // Escreve cabeçalho
+  await docsFetch(accessToken, `documents/${docId}:batchUpdate`, {
+    method: 'POST',
+    body: JSON.stringify({
       requests: [
         {
           insertText: {
@@ -42,23 +48,21 @@ export async function criarDocPauta(
           },
         },
       ],
-    },
+    }),
   });
 
   return docId;
 }
 
-/** Escreve as portarias no documento via batchUpdate */
 export async function escreverPortarias(
   accessToken: string,
   docId: string,
   portarias: Portaria[]
 ): Promise<void> {
-  const docs = getDocsClientForUser(accessToken);
-
-  const doc = await docs.documents.get({ documentId: docId });
+  const getRes = await docsFetch(accessToken, `documents/${docId}`);
+  const doc = await getRes.json();
   let currentIndex =
-    doc.data.body?.content?.reduce((max, el) => {
+    (doc.body?.content || []).reduce((max: number, el: any) => {
       const end = el.endIndex || 0;
       return end > max ? end : max;
     }, 1) || 1;
@@ -69,9 +73,7 @@ export async function escreverPortarias(
     const cabecalho = `PORTARIA Nº ${portaria.numeroOriginal}. ${portaria.data}${portaria.republicacao}`;
     const cabStart = currentIndex;
 
-    requests.push({
-      insertText: { location: { index: currentIndex }, text: cabecalho + '\n' },
-    });
+    requests.push({ insertText: { location: { index: currentIndex }, text: cabecalho + '\n' } });
     const cabEnd = currentIndex + cabecalho.length;
 
     requests.push({
@@ -89,20 +91,13 @@ export async function escreverPortarias(
       },
     });
 
-    const yellowBg = {
-      backgroundColor: {
-        color: { rgbColor: { rgbColor: { red: 1, green: 1, blue: 0 } } },
-      },
-    };
-
-    // Destaques amarelos
     if (portaria.numeroOriginal === 'Nº desconhecido') {
       const idx = cabecalho.indexOf('Nº desconhecido');
       if (idx !== -1) {
         requests.push({
           updateTextStyle: {
             range: { startIndex: cabStart + idx, endIndex: cabStart + idx + 14 },
-            textStyle: yellowBg,
+            textStyle: { backgroundColor: YELLOW_BG },
             fields: 'backgroundColor',
           },
         });
@@ -116,7 +111,7 @@ export async function escreverPortarias(
         requests.push({
           updateTextStyle: {
             range: { startIndex: cabStart + idx, endIndex: cabStart + idx + tag.length },
-            textStyle: yellowBg,
+            textStyle: { backgroundColor: YELLOW_BG },
             fields: 'backgroundColor',
           },
         });
@@ -129,7 +124,7 @@ export async function escreverPortarias(
         requests.push({
           updateTextStyle: {
             range: { startIndex: cabStart + idx, endIndex: cabStart + idx + 17 },
-            textStyle: yellowBg,
+            textStyle: { backgroundColor: YELLOW_BG },
             fields: 'backgroundColor',
           },
         });
@@ -139,9 +134,7 @@ export async function escreverPortarias(
     currentIndex = cabEnd + 1;
 
     if (portaria.considerando) {
-      requests.push({
-        insertText: { location: { index: currentIndex }, text: portaria.considerando + '\n' },
-      });
+      requests.push({ insertText: { location: { index: currentIndex }, text: portaria.considerando + '\n' } });
       const consEnd = currentIndex + portaria.considerando.length;
       requests.push({
         updateParagraphStyle: {
@@ -154,9 +147,7 @@ export async function escreverPortarias(
     }
 
     const conteudo = portaria.conteudo || 'Conteúdo não encontrado.';
-    requests.push({
-      insertText: { location: { index: currentIndex }, text: conteudo + '\n' },
-    });
+    requests.push({ insertText: { location: { index: currentIndex }, text: conteudo + '\n' } });
     const contEnd = currentIndex + conteudo.length;
     requests.push({
       updateParagraphStyle: {
@@ -172,7 +163,7 @@ export async function escreverPortarias(
         requests.push({
           updateTextStyle: {
             range: { startIndex: currentIndex + idx, endIndex: currentIndex + idx + 22 },
-            textStyle: yellowBg,
+            textStyle: { backgroundColor: YELLOW_BG },
             fields: 'backgroundColor',
           },
         });
@@ -186,20 +177,18 @@ export async function escreverPortarias(
 
   for (let i = 0; i < requests.length; i += 100) {
     const batch = requests.slice(i, i + 100);
-    await docs.documents.batchUpdate({
-      documentId: docId,
-      requestBody: { requests: batch },
+    await docsFetch(accessToken, `documents/${docId}:batchUpdate`, {
+      method: 'POST',
+      body: JSON.stringify({ requests: batch }),
     });
   }
 }
 
-/** Obtém o texto de um Google Doc */
 export async function obterTextoDoc(accessToken: string, docId: string): Promise<string> {
-  const docs = getDocsClientForUser(accessToken);
-  const res = await docs.documents.get({ documentId: docId });
-  const body = res.data.body?.content || [];
+  const res = await docsFetch(accessToken, `documents/${docId}`);
+  const doc = await res.json();
   let texto = '';
-  for (const el of body) {
+  for (const el of doc.body?.content || []) {
     if (el.paragraph) {
       for (const pe of el.paragraph.elements || []) {
         if (pe.textRun?.content) texto += pe.textRun.content;

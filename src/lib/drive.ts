@@ -1,36 +1,27 @@
-import { getDriveClientForUser } from './google-auth';
-import type { drive_v3 } from 'googleapis';
+import { driveFetch } from './google-auth';
 
 export async function listarArquivosDaPasta(
   accessToken: string,
   folderId: string
-): Promise<drive_v3.Schema$File[]> {
-  const drive = getDriveClientForUser(accessToken);
-  const res = await drive.files.list({
-    q: `'${folderId}' in parents and trashed = false`,
-    fields: 'files(id, name, createdTime, mimeType)',
-    orderBy: 'name',
-    pageSize: 1000,
-  });
-  return res.data.files || [];
+): Promise<{ id: string; name: string; createdTime: string; mimeType: string }[]> {
+  const q = encodeURIComponent(`'${folderId}' in parents and trashed = false`);
+  const res = await driveFetch(accessToken, `files?q=${q}&fields=files(id,name,createdTime,mimeType)&orderBy=name&pageSize=1000`);
+  const data = await res.json();
+  return data.files || [];
 }
 
-/** Verifica se arquivo com mesmo nome já existe na pasta */
 export async function existeArquivoComNome(
   accessToken: string,
   folderId: string,
   nome: string
 ): Promise<boolean> {
-  const drive = getDriveClientForUser(accessToken);
   const escaped = nome.replace(/'/g, "\\'");
-  const res = await drive.files.list({
-    q: `'${folderId}' in parents and name = '${escaped}' and trashed = false`,
-    fields: 'files(id)',
-  });
-  return (res.data.files || []).length > 0;
+  const q = encodeURIComponent(`'${folderId}' in parents and name = '${escaped}' and trashed = false`);
+  const res = await driveFetch(accessToken, `files?q=${q}&fields=files(id)`);
+  const data = await res.json();
+  return (data.files || []).length > 0;
 }
 
-/** Upload de arquivo para o Drive */
 export async function uploadArquivo(
   accessToken: string,
   nome: string,
@@ -38,65 +29,75 @@ export async function uploadArquivo(
   mimeType: string,
   folderId: string
 ): Promise<string> {
-  const drive = getDriveClientForUser(accessToken);
-  const stream = require('stream');
-  const res = await drive.files.create({
-    requestBody: {
-      name: nome,
-      parents: [folderId],
-      mimeType,
+  const boundary = `-------${Date.now()}`;
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({ name: nome, parents: [folderId] })}\r\n`),
+    Buffer.from(`--${boundary}\r\nContent-Type: ${mimeType}\r\nContent-Transfer-Encoding: base64\r\n\r\n`),
+    buffer,
+    Buffer.from(`\r\n--${boundary}--`),
+  ]);
+
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': `multipart/related; boundary=${boundary}`,
     },
-    media: {
-      mimeType,
-      body: stream.Readable.from(buffer),
-    },
+    body,
   });
-  return res.data.id!;
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Upload error ${res.status}: ${text}`);
+  }
+
+  const data = await res.json();
+  return data.id;
 }
 
-/** Download de arquivo do Drive como Buffer */
 export async function downloadArquivo(accessToken: string, fileId: string): Promise<Buffer> {
-  const drive = getDriveClientForUser(accessToken);
-  const res = await drive.files.get(
-    { fileId, alt: 'media' },
-    { responseType: 'arraybuffer' }
-  );
-  return Buffer.from(res.data as ArrayBuffer);
+  const res = await driveFetch(accessToken, `files/${fileId}?alt=media`);
+  const arrayBuffer = await res.arrayBuffer();
+  return Buffer.from(arrayBuffer);
 }
 
-/** Apagar arquivo (mover para lixeira) */
 export async function apagarArquivo(accessToken: string, fileId: string): Promise<void> {
-  const drive = getDriveClientForUser(accessToken);
-  await drive.files.update({ fileId, requestBody: { trashed: true } });
-}
-
-/** Adicionar permissão pública (anyone leitor) */
-export async function tornarPublico(accessToken: string, fileId: string): Promise<void> {
-  const drive = getDriveClientForUser(accessToken);
-  await drive.permissions.create({
-    fileId,
-    requestBody: { type: 'anyone', role: 'reader' },
+  await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ trashed: true }),
   });
 }
 
-/** Mover arquivo para uma pasta */
+export async function tornarPublico(accessToken: string, fileId: string): Promise<void> {
+  await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ type: 'anyone', role: 'reader' }),
+  });
+}
+
 export async function moverParaPasta(
   accessToken: string,
   fileId: string,
   folderId: string
 ): Promise<void> {
-  const drive = getDriveClientForUser(accessToken);
-  const file = await drive.files.get({ fileId, fields: 'parents' });
-  const previousParents = (file.data.parents || []).join(',');
-  await drive.files.update({
-    fileId,
-    addParents: folderId,
-    removeParents: previousParents,
-    fields: 'id, parents',
+  const fileRes = await driveFetch(accessToken, `files/${fileId}?fields=parents`);
+  const fileData = await fileRes.json();
+  const previousParents = (fileData.parents || []).join(',');
+
+  await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?addParents=${folderId}&removeParents=${previousParents}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 }
 
-/** Extrai folder IDs do request (injetados pelo middleware) */
 export function getFolderIdsFromRequest(req: Request) {
   return {
     portarias: req.headers.get('x-portarias-folder-id') || '',
@@ -105,7 +106,6 @@ export function getFolderIdsFromRequest(req: Request) {
   };
 }
 
-/** Extrai access token do request */
 export function getAccessTokenFromRequest(req: Request): string {
   const token = req.headers.get('x-access-token');
   if (!token) throw new Error('Token de acesso não encontrado');
