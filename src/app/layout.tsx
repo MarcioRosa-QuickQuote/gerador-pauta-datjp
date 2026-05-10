@@ -5,6 +5,9 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Gerador de Pauta - DATJP',
   description: 'Divisão de Apoio Técnico Jurídico da Presidência - TJPA',
+  icons: {
+    icon: 'https://i.imgur.com/LLwdGyL.png',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
