@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listarArquivosDaPasta, getFolderIdsFromRequest, getAccessTokenFromRequest } from '@/lib/drive';
+import { listarArquivosDaPasta, getFolderIdsOrEmpty, getAccessTokenFromRequest } from '@/lib/drive';
 import { isHoje } from '@/lib/utils';
 
 export async function GET(req: NextRequest) {
   try {
     const accessToken = getAccessTokenFromRequest(req);
-    const { sgp: folderId } = await getFolderIdsFromRequest(req);
+    const { sgp: folderId } = getFolderIdsOrEmpty(req);
+
+    if (!folderId) {
+      return NextResponse.json({ pronta: false });
+    }
+
     const files = await listarArquivosDaPasta(accessToken, folderId);
 
     if (files.length === 0) {

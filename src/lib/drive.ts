@@ -123,6 +123,15 @@ export async function getFolderIdsFromRequest(req: Request) {
   return { portarias, pautas, sgp };
 }
 
+/** Versao sem fallback — para polling (nao cria pastas) */
+export function getFolderIdsOrEmpty(req: Request) {
+  return {
+    portarias: req.headers.get('x-portarias-folder-id') || '',
+    pautas: req.headers.get('x-pautas-folder-id') || '',
+    sgp: req.headers.get('x-sgp-folder-id') || '',
+  };
+}
+
 export function getAccessTokenFromRequest(req: Request): string {
   const token = req.headers.get('x-access-token');
   if (!token) throw new Error('Token de acesso não encontrado');

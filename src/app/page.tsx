@@ -251,6 +251,37 @@ export default function Home() {
           onClick={() => setShowConfig(!showConfig)}
           style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
         >
+          {session.user?.image ? (
+            <img
+              src={session.user.image}
+              alt=""
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                border: '2px solid #00274d',
+                objectFit: 'cover',
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                backgroundColor: '#00274d',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 14,
+                fontWeight: 'bold',
+                border: '2px solid #00274d',
+              }}
+            >
+              {(session.user?.name || '?')[0].toUpperCase()}
+            </div>
+          )}
           <span style={{ color: '#00274d', fontSize: 13 }}>
             {session.user?.name}
           </span>
