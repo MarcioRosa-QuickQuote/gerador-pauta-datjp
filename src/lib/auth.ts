@@ -88,6 +88,7 @@ export const authOptions: AuthOptions = {
       return {
         ...session,
         accessToken: token.accessToken,
+        refreshToken: token.refreshToken,
         portariasFolderId: token.portariasFolderId,
         pautasFolderId: token.pautasFolderId,
         sgpFolderId: token.sgpFolderId,

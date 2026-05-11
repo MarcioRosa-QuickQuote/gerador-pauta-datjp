@@ -1,8 +1,7 @@
-import 'next-auth';
-
 declare module 'next-auth' {
   interface Session {
     accessToken?: string;
+    refreshToken?: string;
     portariasFolderId?: string;
     pautasFolderId?: string;
     sgpFolderId?: string;

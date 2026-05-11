@@ -27,7 +27,12 @@ export default function Home() {
   const [gerando, setGerando] = useState(false);
   const [naoGerados, setNaoGerados] = useState<NaoGerado[]>([]);
   const [naoGeradosVisible, setNaoGeradosVisible] = useState(false);
-  const [showSGPButton, setShowSGPButton] = useState(true);
+  const [showSGPButton, setShowSGPButton] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sgpToggle') !== 'hidden';
+    }
+    return true;
+  });
   const [showConfig, setShowConfig] = useState(false);
 
   // Check SGP pauta every 5s (hook no topo, antes dos returns condicionais)
@@ -285,37 +290,6 @@ export default function Home() {
           <span style={{ color: '#00274d', fontSize: 13 }}>
             {session.user?.name}
           </span>
-          {session.user?.image ? (
-            <img
-              src={session.user.image}
-              alt=""
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: '50%',
-                border: '2px solid #00274d',
-                objectFit: 'cover',
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: '50%',
-                backgroundColor: '#00274d',
-                color: 'white',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 14,
-                fontWeight: 'bold',
-                border: '2px solid #00274d',
-              }}
-            >
-              {(session.user?.name || '?')[0].toUpperCase()}
-            </div>
-          )}
         </div>
 
         {showConfig && (
@@ -345,7 +319,10 @@ export default function Home() {
                 <input
                   type="checkbox"
                   checked={showSGPButton}
-                  onChange={(e) => setShowSGPButton(e.target.checked)}
+                  onChange={(e) => {
+                    setShowSGPButton(e.target.checked);
+                    localStorage.setItem('sgpToggle', e.target.checked ? 'visible' : 'hidden');
+                  }}
                   style={{ accentColor: '#00274d' }}
                 />
                 Verificar Pauta SGP

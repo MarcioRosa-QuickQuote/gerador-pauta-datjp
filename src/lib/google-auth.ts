@@ -3,19 +3,50 @@ import { authOptions } from './auth';
 
 export async function getSessionOrThrow() {
   const session = await getServerSession(authOptions);
-  if (!session?.accessToken) {
-    throw new Error('Não autenticado');
+  if (!session?.accessToken) throw new Error('Não autenticado');
+
+  // Tenta refresh se o token expirou (Google tokens duram ~1h)
+  if (session.refreshToken && isTokenExpired(session.accessToken)) {
+    try {
+      const newToken = await refreshAccessToken(session.refreshToken);
+      session.accessToken = newToken;
+    } catch {
+      // Se refresh falhar, tenta com o token existente (vai falhar com 401 do Google)
+    }
   }
+
   return session;
+}
+
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+    return payload.exp * 1000 < Date.now() + 60000; // 1 min de margem
+  } catch {
+    return false;
+  }
+}
+
+async function refreshAccessToken(refreshToken: string): Promise<string> {
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+    }),
+  });
+  if (!res.ok) throw new Error(`Refresh failed: ${res.status}`);
+  const data = await res.json();
+  return data.access_token;
 }
 
 export async function driveFetch(accessToken: string, path: string, options: RequestInit = {}) {
   const res = await fetch(`https://www.googleapis.com/drive/v3/${path}`, {
     ...options,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      ...options.headers,
-    },
+    headers: { Authorization: `Bearer ${accessToken}`, ...options.headers },
   });
   if (!res.ok) {
     const text = await res.text();

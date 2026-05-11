@@ -1,17 +1,25 @@
 import { NextResponse } from 'next/server';
-import { getSessionOrThrow } from '@/lib/google-auth';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { listarArquivosDaPasta, ensureFolders } from '@/lib/drive';
 import { isHoje } from '@/lib/utils';
 
 export async function GET() {
   try {
-    const session = await getSessionOrThrow();
-    const accessToken = session.accessToken!;
+    const session = await getServerSession(authOptions);
+    if (!session?.accessToken) return NextResponse.json({ pronta: false });
+
+    const accessToken = session.accessToken;
     let folderId = session.sgpFolderId;
     if (!folderId) {
-      const f = await ensureFolders(accessToken);
-      folderId = f.sgp;
+      try {
+        const f = await ensureFolders(accessToken);
+        folderId = f.sgp;
+      } catch {
+        return NextResponse.json({ pronta: false });
+      }
     }
+
     const files = await listarArquivosDaPasta(accessToken, folderId);
     if (files.length === 0) return NextResponse.json({ pronta: false });
 
@@ -21,8 +29,7 @@ export async function GET() {
       if (!latestDate || created > latestDate) latestDate = created;
     }
     return NextResponse.json({ pronta: isHoje(latestDate!) });
-  } catch (err: any) {
-    if (err.message === 'Não autenticado') return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ pronta: false });
   }
 }
