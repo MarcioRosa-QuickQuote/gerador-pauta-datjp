@@ -134,11 +134,6 @@ export default function DeleteSection({
               border: '1px solid rgba(255,255,255,0.06)',
             }}
           >
-            <h2 className="text-white text-xl font-bold mb-1">Área de exclusão</h2>
-            <p className="text-sm mb-5" style={{ color: '#9e9e9e' }}>
-              Selecione uma pasta para visualizar ou excluir seu conteúdo.
-            </p>
-
             <div className="flex flex-col gap-3">
               <Card
                 title="Portarias"
