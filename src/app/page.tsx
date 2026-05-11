@@ -352,23 +352,31 @@ export default function Home() {
 
       <Tutorial />
       <Header />
-      <UploadArea onUpload={handleUpload} uploadProgress={uploadProgress} />
+      <div id="uploadArea">
+        <UploadArea onUpload={handleUpload} uploadProgress={uploadProgress} />
+      </div>
       <ProgressBar visible={progressVisible} value={progressValue} text={progressText} />
       {showSGPButton && <BotaoVerificarSGP onCheck={checkPautaSGP} />}
       <BotaoGerarPauta onGerar={gerarPauta} disabled={gerando} />
-      <PautaNotification visible={pautaSGPPronta} />
-      <DeleteSection
-        onApagarPortarias={apagarPortarias}
-        onApagarPautas={apagarPautas}
-        onApagarTudo={apagarTudo}
-        portariasFolderId={(session as any).portariasFolderId}
-        pautasFolderId={(session as any).pautasFolderId}
-      />
-      <NaoGeradosList
-        naoGerados={naoGerados}
-        visible={naoGeradosVisible}
-        onToggle={() => setNaoGeradosVisible(!naoGeradosVisible)}
-      />
+      <div id="pautaNotification">
+        <PautaNotification visible={pautaSGPPronta} />
+      </div>
+      <div id="deleteButton">
+        <DeleteSection
+          onApagarPortarias={apagarPortarias}
+          onApagarPautas={apagarPautas}
+          onApagarTudo={apagarTudo}
+          portariasFolderId={(session as any).portariasFolderId}
+          pautasFolderId={(session as any).pautasFolderId}
+        />
+      </div>
+      <div id="naoGeradosButton">
+        <NaoGeradosList
+          naoGerados={naoGerados}
+          visible={naoGeradosVisible}
+          onToggle={() => setNaoGeradosVisible(!naoGeradosVisible)}
+        />
+      </div>
       <Notification />
       <Sobre />
     </>

@@ -1,102 +1,221 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback } from 'react';
 
-const steps = [
-  { id: 'tutorialStep1', side: 'right', top: 250, left: 'calc(50% + 110px)', text: 'Selecione ou arraste o arquivo da portaria para fazer o upload.' },
-  { id: 'tutorialStep2', side: 'right', top: 450, left: 'calc(50% + 110px)', text: 'Clique no botão para gerar a Pauta.' },
-  { id: 'tutorialStep3', side: 'right', top: 500, left: 'calc(50% + 110px)', text: 'Quando a SGP gerar a pauta do dia, a notificação aparecerá aqui.' },
-  { id: 'tutorialStep4', side: 'right', top: 560, left: 'calc(50% + 110px)', text: 'Clique aqui para apagar os arquivos das portarias e das pautas geradas.' },
-  { id: 'tutorialStep5', side: 'right', top: 600, left: 'calc(50% + 110px)', text: 'Clique aqui para apagar as portarias inseridas.' },
-  { id: 'tutorialStep6', side: 'left', top: 600, left: 'calc(50% + 180px)', text: 'Clique aqui para acessar a pasta das portarias enviadas.' },
-  { id: 'tutorialStep7', side: 'right', top: 640, left: 'calc(50% + 110px)', text: 'Clique aqui para apagar a pauta do dia.' },
-  { id: 'tutorialStep8', side: 'left', top: 640, left: 'calc(50% + 180px)', text: 'Clique aqui para acessar a pasta das pautas geradas.' },
-  { id: 'tutorialStep9', side: 'right', top: 680, left: 'calc(50% + 110px)', text: 'Clique aqui para apagar todos os arquivos.' },
-  { id: 'tutorialStep10', side: 'right', top: 740, left: 'calc(50% + 110px)', text: 'Aqui serão exibidas as portarias que ainda não foram incluídas na pauta.' },
+interface Step {
+  targetId: string;
+  title: string;
+  text: string;
+  position: 'right' | 'left' | 'bottom' | 'top';
+}
+
+const steps: Step[] = [
+  { targetId: 'uploadArea', title: 'Upload', text: 'Selecione ou arraste o arquivo da portaria para fazer o upload.', position: 'right' },
+  { targetId: 'gerarPautaButton', title: 'Gerar Pauta', text: 'Clique no botão para gerar a Pauta.', position: 'right' },
+  { targetId: 'pautaNotification', title: 'Pauta SGP', text: 'Quando a SGP gerar a pauta do dia, a notificação aparecerá aqui.', position: 'right' },
+  { targetId: 'deleteButton', title: 'Apagar Arquivos', text: 'Clique aqui para apagar os arquivos das portarias e das pautas geradas.', position: 'right' },
+  { targetId: 'naoGeradosButton', title: 'Não Gerados', text: 'Aqui serão exibidas as portarias que ainda não foram incluídas na pauta.', position: 'right' },
 ];
 
 export default function Tutorial() {
   const [active, setActive] = useState(-1);
 
-  function start() {
-    setActive(0);
-  }
+  function start() { setActive(0); }
+  function next() { if (active < steps.length - 1) setActive(active + 1); }
+  function prev() { if (active > 0) setActive(active - 1); }
+  function end() { setActive(-1); }
 
-  function next() {
-    if (active < steps.length - 1) setActive(active + 1);
-  }
+  // Highlight target element
+  useEffect(() => {
+    if (active < 0) return;
+    const step = steps[active];
+    const el = document.getElementById(step.targetId);
+    if (el) {
+      el.style.position = 'relative';
+      el.style.zIndex = '1002';
+      el.style.outline = '3px dashed #e53935';
+      el.style.outlineOffset = '4px';
+    }
+    return () => {
+      steps.forEach((s) => {
+        const el = document.getElementById(s.targetId);
+        if (el) {
+          el.style.outline = '';
+          el.style.outlineOffset = '';
+          el.style.zIndex = '';
+          el.style.position = '';
+        }
+      });
+    };
+  }, [active]);
 
-  function end() {
-    setActive(-1);
-  }
+  // Keyboard navigation
+  useEffect(() => {
+    if (active < 0) return;
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') end();
+      if (e.key === 'ArrowRight') next();
+      if (e.key === 'ArrowLeft') prev();
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [active]);
+
+  const step = active >= 0 ? steps[active] : null;
+
+  // Position balloon and draw connector line
+  const updateLayout = useCallback(() => {
+    if (!step) return;
+    const target = document.getElementById(step.targetId);
+    const balloon = document.getElementById('tutorialBalloon');
+    const line = document.getElementById('connectorLine');
+    if (!target || !balloon || !line) return;
+
+    const targetRect = target.getBoundingClientRect();
+    const targetCX = targetRect.left + targetRect.width / 2;
+    const targetCY = targetRect.top + targetRect.height / 2;
+
+    const balloonW = 320;
+    const balloonH = 180;
+    const gap = 30;
+    const margin = 20;
+
+    let bx: number, by: number;
+
+    if (step.position === 'right') {
+      bx = targetRect.right + gap;
+      by = targetCY - balloonH / 2;
+    } else if (step.position === 'left') {
+      bx = targetRect.left - balloonW - gap;
+      by = targetCY - balloonH / 2;
+    } else if (step.position === 'bottom') {
+      bx = targetCX - balloonW / 2;
+      by = targetRect.bottom + gap;
+    } else {
+      bx = targetCX - balloonW / 2;
+      by = targetRect.top - balloonH - gap;
+    }
+
+    // Clamp to viewport
+    bx = Math.max(margin, Math.min(bx, window.innerWidth - balloonW - margin));
+    by = Math.max(margin, Math.min(by, window.innerHeight - balloonH - margin));
+
+    balloon.style.left = `${bx}px`;
+    balloon.style.top = `${by}px`;
+
+    const balloonCX = bx + balloonW / 2;
+    const balloonCY = by + balloonH / 2;
+
+    // Draw line from target center to nearest edge of balloon
+    if (step.position === 'right') {
+      line.setAttribute('x1', String(targetRect.right));
+      line.setAttribute('y1', String(targetCY));
+      line.setAttribute('x2', String(bx));
+      line.setAttribute('y2', String(balloonCY));
+    } else if (step.position === 'left') {
+      line.setAttribute('x1', String(targetRect.left));
+      line.setAttribute('y1', String(targetCY));
+      line.setAttribute('x2', String(bx + balloonW));
+      line.setAttribute('y2', String(balloonCY));
+    } else if (step.position === 'bottom') {
+      line.setAttribute('x1', String(targetCX));
+      line.setAttribute('y1', String(targetRect.bottom));
+      line.setAttribute('x2', String(balloonCX));
+      line.setAttribute('y2', String(by));
+    } else {
+      line.setAttribute('x1', String(targetCX));
+      line.setAttribute('y1', String(targetRect.top));
+      line.setAttribute('x2', String(balloonCX));
+      line.setAttribute('y2', String(by + balloonH));
+    }
+  }, [step]);
+
+  useLayoutEffect(() => {
+    updateLayout();
+    window.addEventListener('resize', updateLayout);
+    return () => window.removeEventListener('resize', updateLayout);
+  }, [updateLayout]);
 
   return (
     <>
-      {/* Button */}
+      {/* Tutorial button */}
       <span
         onClick={start}
-        className="absolute top-2.5 left-2.5 ml-2.5 text-[16px] cursor-pointer z-[1000]"
-        style={{ color: '#2196F3' }}
+        className="absolute top-3 left-3 z-[1000] flex items-center gap-1.5 cursor-pointer select-none"
       >
-        Tutorial
+        <span
+          className="inline-flex items-center justify-center w-7 h-7 rounded-full text-white text-sm font-bold"
+          style={{ backgroundColor: '#2196F3', boxShadow: '0 2px 6px rgba(33,150,243,0.4)' }}
+        >
+          ?
+        </span>
+        <span className="text-sm font-medium" style={{ color: '#1976D2' }}>
+          Tutorial
+        </span>
       </span>
 
       {/* Overlay */}
-      {active >= 0 && (
-        <div
-          className="fixed inset-0 bg-black/70 z-[1001]"
-          onClick={end}
-        />
-      )}
-
-      {/* Steps */}
-      {steps.map((step, i) => (
-        <div
-          key={step.id}
-          className={`absolute z-[1002] ${i === active ? 'block' : 'hidden'}`}
-          style={{ top: step.top, left: step.left }}
-        >
+      {step && (
+        <>
           <div
-            className={`relative bg-[#E6E6FA] px-5 py-4 rounded-lg max-w-[300px] text-center text-sm text-[#333] z-[1002] animate-fadeIn`}
-            style={{
-              boxShadow: '0 6px 12px rgba(0,0,0,0.3)',
-              fontSize: 14,
-            }}
-          >
-            {step.text}
-            <br />
-            {i < steps.length - 1 ? (
-              <button
-                onClick={next}
-                className="mt-2.5 px-4 py-2 text-white rounded cursor-pointer text-xs"
-                style={{ backgroundColor: '#4B0082', border: 'none' }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#6A0DAD')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#4B0082')}
-              >
-                Próximo
-              </button>
-            ) : (
-              <button
-                onClick={end}
-                className="mt-2.5 px-4 py-2 text-white rounded cursor-pointer text-xs"
-                style={{ backgroundColor: '#4B0082', border: 'none' }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#6A0DAD')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#4B0082')}
-              >
-                Finalizar Tutorial
-              </button>
-            )}
-          </div>
-          {/* Arrow */}
-          <div
-            className="absolute top-1/2 -translate-y-1/2 border-[10px] border-transparent z-[1002]"
-            style={{
-              [step.side === 'right' ? 'left' : 'right']: '-10px',
-              [`border${step.side === 'right' ? 'Right' : 'Left'}Color`]: '#E6E6FA',
-            }}
+            className="fixed inset-0 z-[1001]"
+            style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+            onClick={end}
           />
-        </div>
-      ))}
+
+          {/* Balloon */}
+          <div
+            className="fixed z-[1003] bg-white rounded-xl p-5 max-w-[320px] animate-fadeIn"
+            style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.3)' }}
+            id="tutorialBalloon"
+          >
+            <p className="text-sm font-bold mb-1" style={{ color: '#00274d' }}>
+              {step.title}
+            </p>
+            <p className="text-sm mb-4" style={{ color: '#555', lineHeight: 1.5 }}>
+              {step.text}
+            </p>
+            <div className="flex items-center justify-between">
+              <span className="text-xs" style={{ color: '#999' }}>
+                {active + 1} de {steps.length}
+              </span>
+              <div className="flex gap-2">
+                {active > 0 && (
+                  <button
+                    onClick={prev}
+                    className="px-3 py-1.5 text-xs rounded cursor-pointer text-white"
+                    style={{ backgroundColor: '#888', border: 'none' }}
+                  >
+                    Voltar
+                  </button>
+                )}
+                {active < steps.length - 1 ? (
+                  <button
+                    onClick={next}
+                    className="px-3 py-1.5 text-xs rounded cursor-pointer text-white"
+                    style={{ backgroundColor: '#1976D2', border: 'none' }}
+                  >
+                    Próximo
+                  </button>
+                ) : (
+                  <button
+                    onClick={end}
+                    className="px-3 py-1.5 text-xs rounded cursor-pointer text-white"
+                    style={{ backgroundColor: '#4CAF50', border: 'none' }}
+                  >
+                    Finalizar
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* SVG line connector */}
+          <svg className="fixed inset-0 z-[1002] pointer-events-none" id="tutorialLine">
+            <line id="connectorLine" stroke="#e53935" strokeWidth="2" strokeDasharray="6,4" />
+          </svg>
+        </>
+      )}
     </>
   );
 }
