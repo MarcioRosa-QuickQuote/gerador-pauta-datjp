@@ -1,4 +1,3 @@
-import type { AuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 
 const FOLDER_NAMES = {
@@ -52,7 +51,7 @@ async function findOrCreateFolders(accessToken: string) {
   return { portariasFolderId, pautasFolderId, sgpFolderId };
 }
 
-export const authOptions: AuthOptions = {
+export const authOptions = {
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -68,7 +67,7 @@ export const authOptions: AuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, account }) {
+    async jwt({ token, account }: any) {
       if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
@@ -84,7 +83,7 @@ export const authOptions: AuthOptions = {
       }
       return token;
     },
-    async session({ session, token }) {
+    async session({ session, token }: any) {
       return {
         ...session,
         accessToken: token.accessToken,
@@ -95,6 +94,6 @@ export const authOptions: AuthOptions = {
       };
     },
   },
-  session: { strategy: 'jwt' },
+  session: { strategy: 'jwt' as const },
   secret: process.env.NEXTAUTH_SECRET,
 };

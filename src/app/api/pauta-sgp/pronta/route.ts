@@ -1,16 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getSessionOrThrow } from '@/lib/google-auth';
 import { listarArquivosDaPasta, ensureFolders } from '@/lib/drive';
 import { isHoje } from '@/lib/utils';
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.accessToken) return NextResponse.json({ pronta: false });
-
-    const accessToken = session.accessToken;
-    let folderId = session.sgpFolderId;
+    const session = await getSessionOrThrow();
+    const accessToken = session.accessToken!;
+    let folderId = session.sgpFolderId || null;
     if (!folderId) {
       try {
         const f = await ensureFolders(accessToken);

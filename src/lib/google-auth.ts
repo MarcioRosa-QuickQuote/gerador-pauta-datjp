@@ -1,18 +1,16 @@
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 import { authOptions } from './auth';
+import type { AppSession } from '@/types/session';
 
-export async function getSessionOrThrow() {
-  const session = await getServerSession(authOptions);
+export async function getSessionOrThrow(): Promise<AppSession> {
+  const session = (await getServerSession(authOptions)) as AppSession;
   if (!session?.accessToken) throw new Error('Não autenticado');
 
-  // Tenta refresh se o token expirou (Google tokens duram ~1h)
   if (session.refreshToken && isTokenExpired(session.accessToken)) {
     try {
       const newToken = await refreshAccessToken(session.refreshToken);
       session.accessToken = newToken;
-    } catch {
-      // Se refresh falhar, tenta com o token existente (vai falhar com 401 do Google)
-    }
+    } catch { /* usa token existente */ }
   }
 
   return session;
@@ -21,7 +19,7 @@ export async function getSessionOrThrow() {
 function isTokenExpired(token: string): boolean {
   try {
     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-    return payload.exp * 1000 < Date.now() + 60000; // 1 min de margem
+    return payload.exp * 1000 < Date.now() + 60000;
   } catch {
     return false;
   }
