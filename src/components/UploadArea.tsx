@@ -23,7 +23,7 @@ export default function UploadArea({ onUpload, uploadProgress }: UploadAreaProps
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`mx-auto my-4 px-4 py-4 border-2 border-dashed rounded-lg w-[90%] max-w-xs text-center cursor-pointer relative z-[1] transition-colors ${
+        className={`mx-auto my-4 px-6 py-4 border-2 border-dashed rounded-lg w-[90%] max-w-sm text-center cursor-pointer relative z-[1] transition-colors ${
           isDragOver ? 'bg-[#d0d0d0] border-[#666]' : 'bg-[#f5f5f5] border-[#ccc]'
         }`}
         style={{ boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
